@@ -1,0 +1,6 @@
+[workspace]
+members = [
+	"backend",
+	"canviewer"
+]
+resolver="2"
