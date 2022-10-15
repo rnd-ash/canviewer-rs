@@ -13,6 +13,7 @@ pub struct CanViewer {
     is_reading: Arc<AtomicBool>,
     load_error: Option<String>,
     frames: Arc<RwLock<HashMap<u32, CanFrame>>>,
+    frames_previous: HashMap<u32, CanFrame>,
     open_frames: Vec<(usize, usize)>
 }
 
@@ -76,6 +77,7 @@ impl CanViewer {
             is_reading,
             load_error,
             frames: frame_list,
+            frames_previous: HashMap::new(),
             open_frames: Vec::new()
         })
 
@@ -230,7 +232,17 @@ impl eframe::App for CanViewer {
                                     for idx in 0..8 {
                                         match frame.get_data().get(idx) {
                                             Some(byte) => {
-                                                row.col(|u| {u.label(format!("{:02X}", byte));});
+                                                row.col(|u| {
+                                                    let mut l = RichText::new(format!("{:02X}", byte));
+                                                    if let Some(of) = self.frames_previous.get(&frame.get_address()) {
+                                                        if of.get_data()[idx] > *byte {
+                                                            l = l.color(Color32::RED);
+                                                        } else if of.get_data()[idx] < *byte {
+                                                            l = l.color(Color32::BLUE);
+                                                        }
+                                                    }
+                                                    u.label(l);
+                                                });
                                                 if byte.is_ascii_graphic() {
                                                     write!(ascii, "{}", String::from_utf8_lossy(&[*byte]));
                                                 } else {
@@ -242,6 +254,7 @@ impl eframe::App for CanViewer {
                                             }
                                         }
                                     }
+                                    self.frames_previous.insert(frame.get_address(), frame);
                                     // ASCII row
                                     row.col(|x| {x.label(ascii);});
                                 })
