@@ -244,7 +244,7 @@ impl eframe::App for CanViewer {
                                                     u.label(l);
                                                 });
                                                 if byte.is_ascii_graphic() {
-                                                    write!(ascii, "{}", String::from_utf8_lossy(&[*byte]));
+                                                    write!(ascii, "{}", String::from_utf8_lossy(&[*byte])).unwrap();
                                                 } else {
                                                     ascii.push_str(".");
                                                 }
