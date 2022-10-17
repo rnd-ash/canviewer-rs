@@ -66,9 +66,9 @@ fn get_signal_type(dbc: &DBC, message: &MessageId, signal: &Signal) -> tree_dbc:
     let m = message.clone();
     let v = dbc.value_descriptions_for_signal(m, signal.name());
     if let Some(enum_entries) = v {
-        let mut x: Vec<(u64, String)> = Vec::new();
+        let mut x: Vec<(i64, String)> = Vec::new();
         for e in enum_entries {
-            x.push((*e.a() as u64, e.b().to_string()))
+            x.push((*e.a() as i64, e.b().to_string()))
         }
         x.sort_by(|e,f| e.0.partial_cmp(&f.0).unwrap());
 
@@ -97,6 +97,7 @@ pub fn load_dbc_from_bytes(b: &[u8]) -> CanResult<TreeDbc> {
                 unit: signal.unit().clone(),
                 min: signal.min as f32,
                 max: signal.max as f32,
+                signed: *signal.value_type() == ValueType::Signed
             };
             signal_array.push(sig);
         }

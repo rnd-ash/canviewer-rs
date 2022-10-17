@@ -41,8 +41,12 @@ pub fn parse_signal(signal: &Signal, raw: &[u8]) -> SignalParseResult<ParsedSign
     }
 
     let mut r = BitReader::new(raw);
-    let _ignored = r.read_u64(signal.start_bit as u8);
-    let data = r.read_u64(signal.length_bits as u8).unwrap();
+    
+    let _ignored = r.skip(signal.start_bit);
+    let data = match signal.signed {
+        true => r.read_i64(signal.length_bits as u8).unwrap(),
+        false => r.read_u64(signal.length_bits as u8).unwrap() as i64
+    };
 
     // Now process signal
     match &signal.signal_type {

@@ -10,7 +10,8 @@ pub struct Signal {
     pub length_bits: u64,
     pub unit: String,
     pub min: f32,
-    pub max: f32
+    pub max: f32,
+    pub signed: bool,
 } 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,7 +30,7 @@ impl Default for ByteOrder {
 pub enum SignalType {
     Bool,
     Linear { multi: f32, offset: f32 },
-    Enum(Vec<(u64, String)>)
+    Enum(Vec<(i64, String)>)
 }
 
 impl Default for SignalType {
