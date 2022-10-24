@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use bitreader::BitReader;
 
 use crate::tree_dbc::Signal;
@@ -41,7 +39,7 @@ pub fn parse_signal(signal: &Signal, raw: &[u8]) -> SignalParseResult<ParsedSign
     }
 
     let mut r = BitReader::new(raw);
-    
+
     let _ignored = r.skip(signal.start_bit);
     let data = match signal.signed {
         true => r.read_i64(signal.length_bits as u8).unwrap(),

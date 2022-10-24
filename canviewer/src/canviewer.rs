@@ -1,7 +1,7 @@
-use std::{sync::{atomic::{AtomicBool, Ordering}, Arc}, fs::File, io::Read, iter::Map};
+use std::{sync::{atomic::{AtomicBool, Ordering}, Arc}, fs::File, io::Read, ops::Not};
 
-use backend::{load_dbc_from_bytes, parse_signal};
-use ecu_diagnostics::{hardware::{Hardware, HardwareScanner, socketcan::{SocketCanDevice, SocketCanCanChannel, SocketCanScanner}}, channel::{CanChannel, CanFrame, Packet}};
+use backend::{load_dbc_from_bytes, parse_signal, tree_dbc::{Signal, SignalType}};
+use ecu_diagnostics::{hardware::{Hardware, HardwareScanner, socketcan::{SocketCanScanner}}, channel::{CanFrame, Packet}};
 use eframe::{egui::*, epaint::{mutex::RwLock, ahash::{HashMap, HashMapExt}}};
 use egui_extras::*;
 use std::fmt::Write;
@@ -14,7 +14,8 @@ pub struct CanViewer {
     load_error: Option<String>,
     frames: Arc<RwLock<HashMap<u32, CanFrame>>>,
     frames_previous: HashMap<u32, CanFrame>,
-    open_frames: Vec<(usize, usize)>
+    open_frames: Vec<(usize, usize)>,
+    described_signal: Option<Signal>
 }
 
 
@@ -23,7 +24,7 @@ impl CanViewer {
         let scanner = SocketCanScanner::new();
         let can_hw = scanner.open_device_by_name(&iface_name)?;
         let mut can_channel = Hardware::create_can_channel(can_hw)?;
-        can_channel.open();
+        can_channel.open().unwrap();
         let is_reading = Arc::new(AtomicBool::new(true));
         let frame_list = Arc::new(RwLock::new(HashMap::new()));
         let is_reading_c = is_reading.clone();
@@ -78,21 +79,22 @@ impl CanViewer {
             load_error,
             frames: frame_list,
             frames_previous: HashMap::new(),
-            open_frames: Vec::new()
+            open_frames: Vec::new(),
+            described_signal: None
         })
 
     }
 }
 
 impl eframe::App for CanViewer {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         SidePanel::left("MainBar").show(ctx, |ui| {
             ui.heading("CanViewerRS");
             ui.separator();
             ui.label(format!("Connected to {}", self.iface_name));
             
             if ui.button("Pause/Play").clicked() {
-                let new_state = !self.is_reading.load(Ordering::Relaxed);
+                let new_state = self.is_reading.load(Ordering::Relaxed).not();
                 self.is_reading.store(new_state, Ordering::Relaxed);
             }
 
@@ -110,16 +112,13 @@ impl eframe::App for CanViewer {
                                             if msg_ui.button("Hide Frame").clicked() {
                                                 self.open_frames.retain(|(e, m)| *e != ecu_idx && *m != msg_idx)
                                             }
-                                        } else {
-                                            if msg_ui.button("Show Frame").clicked() {
-                                                self.open_frames.push((ecu_idx, msg_idx));
-                                            }
+                                        } else if msg_ui.button("Show Frame").clicked() {
+                                            self.open_frames.push((ecu_idx, msg_idx));
                                         }
 
                                         for signal in &msg.signals {
-                                            let s_r = msg_ui.label(&signal.name);
-                                            if let Some(cmt) = &signal.comment {
-                                                s_r.on_hover_text(cmt);
+                                            if msg_ui.selectable_label(false, &signal.name).clicked() {
+                                                self.described_signal = Some(signal.clone())
                                             }
                                         }
                                     });
@@ -153,7 +152,7 @@ impl eframe::App for CanViewer {
                             ui.label(format!("{:02X?}", cf.get_data()));
                             
 
-                            let mut table = TableBuilder::new(ui)
+                            let table = TableBuilder::new(ui)
                                 .striped(true)
                                 .scroll(true)
                                 .clip(false)
@@ -194,7 +193,7 @@ impl eframe::App for CanViewer {
             }
 
             containers::Window::new("Frame viewer").show(cui.ctx(), |ui| {
-                let mut table = TableBuilder::new(ui)
+                let table = TableBuilder::new(ui)
                                 .striped(true)
                                 .scroll(true)
                                 .clip(false)
@@ -246,11 +245,11 @@ impl eframe::App for CanViewer {
                                                 if byte.is_ascii_graphic() {
                                                     write!(ascii, "{}", String::from_utf8_lossy(&[*byte])).unwrap();
                                                 } else {
-                                                    ascii.push_str(".");
+                                                    ascii.push('.');
                                                 }
                                             },
                                             None => {
-                                                row.col(|x| {});
+                                                row.col(|_| {});
                                             }
                                         }
                                     }
@@ -261,6 +260,48 @@ impl eframe::App for CanViewer {
                             });
 
             });
+
+            let mut win_open = true;
+            if let Some(signal) = &self.described_signal {
+                containers::Window::new(format!("Signal description ({})", signal.name))
+                    .open(&mut win_open)
+                    .show(cui.ctx(), |ui| {
+                        if let Some(d) = &signal.comment {
+                            ui.heading("Signal description");
+                            ui.label(d);
+                        }
+                        ui.add_space(2.0);
+                        ui.heading("Signal bit data");
+                        ui.label(format!("Bit offset: {}", signal.start_bit));
+                        ui.label(format!("Length bits: {}", signal.length_bits));
+                        ui.label(format!("Signed data: {}", signal.signed));
+                        ui.label(format!("Byte order: {:?}", signal.order));
+                        ui.add_space(2.0);
+                        ui.heading("Data representation");
+                        match &signal.signal_type {
+                            SignalType::Bool => {
+                                ui.label("Boolean");
+                            },
+                            SignalType::Linear { multi, offset } => {
+                                ui.label("Linear data type");
+                                ui.separator();
+                                ui.label(format!("  Multiplier: {}", multi));
+                                ui.label(format!("  Offset: {}", offset));
+                            },
+                            SignalType::Enum(list) => {
+                                ui.label("Enumeration");
+                                ui.separator();
+                                for e in list {
+                                    ui.label(format!("{} - {}", e.0, e.1));
+                                }
+                            },
+                        }
+                    });
+            }
+            if !win_open { // Window was closed
+                self.described_signal = None;       
+            }
+
             ctx.request_repaint();
         });
 

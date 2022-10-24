@@ -11,7 +11,7 @@ impl ErrorPage {
 }
 
 impl eframe::App for ErrorPage {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             ui.label(format!("Error starting CanViewerRS. {}", self.msg));
         });

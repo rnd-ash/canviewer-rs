@@ -23,11 +23,11 @@ impl ToString for CanViewError {
 impl<'a> From<can_dbc::Error<'a>> for CanViewError {
     fn from(e: can_dbc::Error<'a>) -> Self {
         match e {
-            can_dbc::Error::Incomplete(curr_dbc, left_over) => {
+            can_dbc::Error::Incomplete(_curr_dbc, _left_over) => {
                 Self::DbcError("Incomplete DBC!".into())
             },
             can_dbc::Error::Nom(nom_err) => {
-                Self::DbcError(format!("DBC Parse nom error: {}", nom_err.to_string()))
+                Self::DbcError(format!("DBC Parse nom error: {}", nom_err))
             },
             can_dbc::Error::MultipleMultiplexors => {
                 Self::DbcError("Multiple identical Multiplexors exist in DBC!".into())
@@ -44,7 +44,7 @@ fn locate_signal_comment(dbc: &DBC, msg_id: &MessageId, sig_name: &String) -> Op
             }
         }
     }
-    return None;
+    None
 }
 
 fn locate_message_comment(dbc: &DBC, msg_id: &MessageId) -> Option<String> {
@@ -55,7 +55,7 @@ fn locate_message_comment(dbc: &DBC, msg_id: &MessageId) -> Option<String> {
             }
         }
     }
-    return None;
+    None
 }
 
 fn get_signal_type(dbc: &DBC, message: &MessageId, signal: &Signal) -> tree_dbc::SignalType {
@@ -63,7 +63,7 @@ fn get_signal_type(dbc: &DBC, message: &MessageId, signal: &Signal) -> tree_dbc:
         return tree_dbc::SignalType::Bool
     }
     // Iterate over all value descriptions
-    let m = message.clone();
+    let m = *message;
     let v = dbc.value_descriptions_for_signal(m, signal.name());
     if let Some(enum_entries) = v {
         let mut x: Vec<(i64, String)> = Vec::new();
@@ -72,9 +72,9 @@ fn get_signal_type(dbc: &DBC, message: &MessageId, signal: &Signal) -> tree_dbc:
         }
         x.sort_by(|e,f| e.0.partial_cmp(&f.0).unwrap());
 
-        return tree_dbc::SignalType::Enum(x)
+        tree_dbc::SignalType::Enum(x)
     } else {
-        return tree_dbc::SignalType::Linear { multi: signal.factor as f32, offset: signal.offset as f32 }
+        tree_dbc::SignalType::Linear { multi: signal.factor as f32, offset: signal.offset as f32 }
     }
 }
 
