@@ -16,4 +16,4 @@ eframe = {version="0.19.0", features=["wgpu"]}
 egui_extras = "0.19.0"
 image = "0.24.1"
 backend={path="../backend"}
-ecu_diagnostics="0.90.51"
+ecu_diagnostics="0.90.52"
